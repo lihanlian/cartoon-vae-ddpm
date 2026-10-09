@@ -18,6 +18,7 @@ class Encoder(nn.Module):
         self.flatten_dim = self.C * self.H * self.W
 
         self.fc_mu     = nn.Linear(self.flatten_dim, z_dim)
+        # Predict log-variance of latent q(z | x), not decoder pixel variance.
         self.fc_logvar = nn.Linear(self.flatten_dim, z_dim)
 
     def forward(self, x):
@@ -31,18 +32,30 @@ class Decoder(nn.Module):
         enc = Encoder(out_ch, img_size, z_dim)  # just for shape
         self.C, self.H, self.W = enc.C, enc.H, enc.W
 
+        # This decoder predicts only the pixel means f_theta(z), with no
+        # learned pixel-variance head. The fixed observation variance is implicit
+        # in the Gaussian interpretation of the MSE loss in train_vae.py.
         self.fc = nn.Linear(z_dim, self.C*self.H*self.W)
         self.deconv = nn.Sequential(
             nn.ReLU(True),
             nn.ConvTranspose2d(self.C,128,4,2,1), nn.ReLU(True),
             nn.ConvTranspose2d(128, 64,4,2,1),   nn.ReLU(True),
             nn.ConvTranspose2d(64, 32,4,2,1),    nn.ReLU(True),
-            nn.ConvTranspose2d(32, out_ch,4,2,1), nn.Tanh(),
+            nn.ConvTranspose2d(32, out_ch,4,2,1),
+            # Match training pixels: ToTensor maps [0,255] to [0,1], then
+            # Normalize(mean=0.5, std=0.5) maps them to [-1,1] in utils.py.
+            # Tanh bounds the predicted means; it does not set their variance.
+            nn.Tanh(),
         )
 
     def forward(self, z):
+        # z has shape [batch, z_dim]; current training uses z_dim=512.
         batch = z.size(0)
+        # Project each latent vector to C*H*W values, then reshape to feature maps.
+        # For 64x64 inputs: [batch, 512] -> [batch, 4096] -> [batch, 256, 4, 4].
         h = self.fc(z).view(batch, self.C, self.H, self.W)
+        # Four stride-2 transposed convolutions grow spatial sizes 4->8->16->32->64.
+        # Return the mean reconstruction [batch, 3, 64, 64] for RGB 64x64 images.
         return self.deconv(h)
 
 

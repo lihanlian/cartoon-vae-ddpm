@@ -34,6 +34,10 @@ with torch.no_grad():
     samples = (samples + 1) * 0.5    # to [0,1]
     nrow = round(N_SAMPLES**0.5)
     grid = torchvision.utils.make_grid(samples, nrow=nrow)
+
+    # If your tensor values are floats in the range [0.0, 1.0], 
+    # the transform automatically scales them to [0, 255] 
+    # when converting to a standard 8-bit PIL image.
     to_pil = ToPILImage() 
     im = to_pil(grid) 
     im.save(os.path.join(OUT_DIR, "sample_grid.png"))

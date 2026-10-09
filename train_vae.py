@@ -49,9 +49,15 @@ model  = VAE(in_channels=3, image_size=IMAGE_SIZE, z_dim=Z_DIM).to(device)
 opt    = optim.Adam(model.parameters(), lr=LR)
 
 # --- 4) Loss function ---
+# Interpret p(x | z) as Normal(recon, sigma_x^2 * I) with fixed pixel variance.
+# Gaussian negative log likelihood = sum((x-recon)^2)/(2*sigma_x^2) + constant.
+# This unit-weight summed MSE, with KL_WEIGHT=1, corresponds to sigma_x^2=0.5
+# (std=1/sqrt(2)) in normalized pixel units. No decoder std tensor is needed.
 mse = nn.MSELoss(reduction='sum')
 def loss_fn(recon, x, mu, logvar):
+    # recon uses one sampled z, giving a Monte Carlo estimate of expected NLL.
     recon_loss = mse(recon, x)
+    # mu and logvar describe latent q(z | x), separate from the pixel variance.
     kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     return recon_loss + KL_WEIGHT*kl, recon_loss, kl
 

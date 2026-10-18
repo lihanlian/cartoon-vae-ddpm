@@ -13,7 +13,7 @@ This repository is on using **variational autoencoders (VAE)** and **diffusion m
 **DDPM Result**
 
 <p align="center">
-  <img alt="Image 1" src="runs/ddpm/sample_grid_200.jpg" width="50%" />
+  <img alt="Image 1" src="runs/ddpm/sample_grid_180.jpg" width="50%" />
 </p>
 <p align="center">5x5 DDPM sample grid</p>
 

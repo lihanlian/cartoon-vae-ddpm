@@ -49,39 +49,40 @@ model  = VAE(in_channels=3, image_size=IMAGE_SIZE, z_dim=Z_DIM).to(device)
 opt    = optim.Adam(model.parameters(), lr=LR)
 
 # --- 4) Loss function ---
-# Interpret p(x | z) as Normal(recon, sigma_x^2 * I) with fixed pixel variance.
-# Gaussian negative log likelihood = sum((x-recon)^2)/(2*sigma_x^2) + constant.
+# Interpret p(x | z) as Normal(x_recon, sigma_x^2 * I) with fixed pixel variance.
+# Gaussian negative log likelihood = sum((x-x_recon)^2)/(2*sigma_x^2) + constant.
 # This unit-weight summed MSE, with KL_WEIGHT=1, corresponds to sigma_x^2=0.5
 # (std=1/sqrt(2)) in normalized pixel units. No decoder std tensor is needed.
 mse = nn.MSELoss(reduction='sum')
-def loss_fn(recon, x, mu, logvar):
-    # recon uses one sampled z, giving a Monte Carlo estimate of expected NLL.
-    recon_loss = mse(recon, x)
+def loss_fn(x_recon, x, mu, logvar):
+    # x_recon uses one sampled z, giving a Monte Carlo estimate of expected NLL.
+    recon_loss = mse(x_recon, x)
     # mu and logvar describe latent q(z | x), separate from the pixel variance.
-    kl = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return recon_loss + KL_WEIGHT*kl, recon_loss, kl
+    kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    total_loss = recon_loss + KL_WEIGHT * kl_loss
+    return total_loss, recon_loss, kl_loss
 
 # --- 5) Training loop ---
 for epoch in range(1, EPOCHS+1):
     model.train()
-    total, tot_rec, tot_kl = 0, 0, 0
+    epoch_total_loss, epoch_recon_loss, epoch_kl_loss = 0, 0, 0
     pbar = tqdm(loader, desc=f"Epoch {epoch}")
     for x in pbar:
         x = x.to(device)
-        recon, mu, logvar = model(x)
-        loss, rec_l, kl_l = loss_fn(recon, x, mu, logvar)
+        x_recon, mu, logvar = model(x)
+        total_loss, recon_loss, kl_loss = loss_fn(x_recon, x, mu, logvar)
 
         opt.zero_grad()
-        loss.backward()
+        total_loss.backward()
         opt.step()
 
-        total  += loss.item()
-        tot_rec+= rec_l.item()
-        tot_kl += kl_l.item()
+        epoch_total_loss += total_loss.item()
+        epoch_recon_loss += recon_loss.item()
+        epoch_kl_loss += kl_loss.item()
         pbar.set_postfix({
-            "L": total/len(dataset),
-            "R": tot_rec/len(dataset),
-            "K": tot_kl/len(dataset)
+            "L_total": epoch_total_loss / len(dataset),
+            "L_recon": epoch_recon_loss / len(dataset),
+            "L_kl": epoch_kl_loss / len(dataset)
         })
 model_name = f'{MODEL_DIR}/vae_zdim{Z_DIM}.pth'
 torch.save(model.state_dict(), model_name)

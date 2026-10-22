@@ -77,5 +77,5 @@ class VAE(nn.Module):
     def forward(self, x):
         mu, logvar = self.enc(x)
         z          = self.reparameterize(mu, logvar)
-        recon      = self.dec(z)
-        return recon, mu, logvar
+        x_recon    = self.dec(z)
+        return x_recon, mu, logvar
